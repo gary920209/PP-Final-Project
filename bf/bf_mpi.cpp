@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
 
     if (rank == 0) {
         cout << "Matches: " << total << "\n";
-        cout << "Time(s): " << fixed << setprecision(6) << max_time << " (max rank time)\n";
+        cout << "Time(s): " << fixed << setprecision(6) << max_time << "\n";
         cout << "Ranks: " << size << "\n";
     }
 

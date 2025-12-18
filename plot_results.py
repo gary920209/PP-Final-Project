@@ -70,53 +70,59 @@ def plot_rk_cuda_results(csv_path='rk/rk_test_results.csv', output_dir='plots'):
     df = pd.read_csv(csv_path)
     os.makedirs(output_dir, exist_ok=True)
     
-    # 1. 3D surface plot data preparation
-    fig = plt.figure(figsize=(14, 10))
+    # Filter for threads_per_block = 64 only
+    df = df[df['threads_per_block'] == 64].copy()
     
-    # Plot 1: Heatmap for each chunk size
-    chunk_sizes = sorted(df['chunk_size_mb'].unique())
-    n_chunks = len(chunk_sizes)
+    if len(df) == 0:
+        print("No data found for threads_per_block=64")
+        return
     
-    for idx, chunk_size in enumerate(chunk_sizes):
-        ax = fig.add_subplot(2, 2, idx + 1)
-        subset = df[df['chunk_size_mb'] == chunk_size]
-        pivot = subset.pivot_table(values='exec_time_s', index='threads_per_block', columns='blocks')
-        
-        sns.heatmap(pivot, annot=True, fmt='.3f', cmap='viridis', ax=ax, cbar_kws={'label': 'Time (s)'})
-        ax.set_title(f'RK CUDA: Chunk Size = {chunk_size} MB')
-        ax.set_xlabel('Blocks')
-        ax.set_ylabel('Threads per Block')
+    # 1. Heatmap: Time vs chunk_size and blocks (similar to BM)
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Using reported_time_s if available, otherwise exec_time_s
+    time_col_reported = 'reported_time_s' if 'reported_time_s' in df.columns else 'exec_time_s'
+    pivot1 = df.pivot_table(values=time_col_reported, index='blocks', columns='chunk_size_mb')
+    sns.heatmap(pivot1, annot=True, fmt='.3f', cmap='YlOrRd', ax=axes[0])
+    axes[0].set_title('RK CUDA: Reported Time (s)\nChunk Size vs Blocks (threads_per_block=64)')
+    axes[0].set_xlabel('Chunk Size (MB)')
+    axes[0].set_ylabel('Number of Blocks')
+    
+    # Using exec_time_s
+    pivot2 = df.pivot_table(values='exec_time_s', index='blocks', columns='chunk_size_mb')
+    sns.heatmap(pivot2, annot=True, fmt='.3f', cmap='YlOrRd', ax=axes[1])
+    axes[1].set_title('RK CUDA: Execution Time (s)\nChunk Size vs Blocks (threads_per_block=64)')
+    axes[1].set_xlabel('Chunk Size (MB)')
+    axes[1].set_ylabel('Number of Blocks')
     
     plt.tight_layout()
-    plt.savefig(f'{output_dir}/rk_cuda_heatmaps.png', dpi=300, bbox_inches='tight')
-    print(f"Saved: {output_dir}/rk_cuda_heatmaps.png")
+    plt.savefig(f'{output_dir}/rk_cuda_heatmap.png', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_dir}/rk_cuda_heatmap.png")
     plt.close()
     
-    # 2. Line plot: Effect of total threads
-    fig, ax = plt.subplots(figsize=(12, 6))
-    for chunk_size in chunk_sizes:
-        subset = df[df['chunk_size_mb'] == chunk_size].copy()
-        subset = subset.sort_values('total_threads')
-        ax.plot(subset['total_threads'], subset['exec_time_s'], marker='o', label=f'{chunk_size} MB')
+    # 2. Line plot: Effect of blocks on time for different chunk sizes (similar to BM)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for chunk_size in sorted(df['chunk_size_mb'].unique()):
+        subset = df[df['chunk_size_mb'] == chunk_size]
+        ax.plot(subset['blocks'], subset[time_col_reported], marker='o', label=f'{chunk_size} MB')
     
-    ax.set_xlabel('Total Threads (Blocks × Threads per Block)')
-    ax.set_ylabel('Execution Time (s)')
-    ax.set_title('RK CUDA: Performance vs Total Thread Count')
+    ax.set_xlabel('Number of Blocks')
+    ax.set_ylabel('Time (s)')
+    ax.set_title('RK CUDA: Performance vs Number of Blocks (threads_per_block=64)')
     ax.legend(title='Chunk Size')
     ax.grid(True, alpha=0.3)
-    ax.set_xscale('log')
-    plt.savefig(f'{output_dir}/rk_cuda_total_threads.png', dpi=300, bbox_inches='tight')
-    print(f"Saved: {output_dir}/rk_cuda_total_threads.png")
+    plt.savefig(f'{output_dir}/rk_cuda_blocks.png', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_dir}/rk_cuda_blocks.png")
     plt.close()
     
     # 3. Best configuration
     best_idx = df['exec_time_s'].idxmin()
     best = df.loc[best_idx]
-    print(f"\nBest RK CUDA configuration:")
-    print(f"  Chunk: {best['chunk_size_mb']} MB, Blocks: {best['blocks']}, Threads: {best['threads_per_block']}")
-    print(f"  Total threads: {best['total_threads']}, Time: {best['exec_time_s']:.4f} s")
+    print(f"\nBest RK CUDA configuration (threads_per_block=64):")
+    print(f"  Chunk: {best['chunk_size_mb']} MB, Blocks: {best['blocks']}")
+    print(f"  Time: {best['exec_time_s']:.4f} s")
 
-def plot_bf_cuda_results(csv_path='bf_test_results.csv', output_dir='plots'):
+def plot_bf_cuda_results(csv_path='bf/bf_cuda_results.csv', output_dir='plots'):
     """Plot Brute Force CUDA experiment results"""
     if not os.path.exists(csv_path):
         print(f"File not found: {csv_path}")
@@ -125,7 +131,7 @@ def plot_bf_cuda_results(csv_path='bf_test_results.csv', output_dir='plots'):
     df = pd.read_csv(csv_path)
     os.makedirs(output_dir, exist_ok=True)
     
-    # Heatmap
+    # 1. Heatmap
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     
     pivot1 = df.pivot_table(values='reported_time_s', index='blocks', columns='chunk_size_mb')
@@ -144,6 +150,28 @@ def plot_bf_cuda_results(csv_path='bf_test_results.csv', output_dir='plots'):
     plt.savefig(f'{output_dir}/bf_cuda_heatmap.png', dpi=300, bbox_inches='tight')
     print(f"Saved: {output_dir}/bf_cuda_heatmap.png")
     plt.close()
+    
+    # 2. Line plot: Effect of blocks on time for different chunk sizes
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for chunk_size in sorted(df['chunk_size_mb'].unique()):
+        subset = df[df['chunk_size_mb'] == chunk_size]
+        ax.plot(subset['blocks'], subset['reported_time_s'], marker='o', label=f'{chunk_size} MB')
+    
+    ax.set_xlabel('Number of Blocks')
+    ax.set_ylabel('Time (s)')
+    ax.set_title('BF CUDA: Performance vs Number of Blocks')
+    ax.legend(title='Chunk Size')
+    ax.grid(True, alpha=0.3)
+    plt.savefig(f'{output_dir}/bf_cuda_blocks.png', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_dir}/bf_cuda_blocks.png")
+    plt.close()
+    
+    # 3. Best configuration
+    best_idx = df['reported_time_s'].idxmin()
+    best = df.loc[best_idx]
+    print(f"\nBest BF CUDA configuration:")
+    print(f"  Chunk: {best['chunk_size_mb']} MB, Blocks: {best['blocks']}")
+    print(f"  Time: {best['reported_time_s']:.4f} s")
 
 def plot_algorithm_comparison(bm_csv='experiment_results.csv', 
                               bf_csv='experiment_results_bf.csv',
@@ -201,9 +229,9 @@ def main():
     print("Generating plots from experiment results...\n")
     
     # Plot individual CUDA experiments
-    plot_bm_cuda_results()
-    plot_rk_cuda_results()
-    plot_bf_cuda_results()
+    plot_bm_cuda_results(csv_path='bm/bm_cuda_results.csv')
+    plot_rk_cuda_results(csv_path='rk/rk_test_results.csv')  # Explicitly specify the path
+    plot_bf_cuda_results(csv_path='bf/bf_cuda_results.csv')
     
     # Compare algorithms
     plot_algorithm_comparison()
