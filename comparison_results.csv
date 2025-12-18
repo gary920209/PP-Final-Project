@@ -1,0 +1,6 @@
+Algorithm,Implementation,Time(s),Matches
+BF,Sequential,0.338039,524
+BF,CUDA,0.399748,524
+BM,Sequential,0.090192,524
+BM,CUDA,0.336029,524
+RK,Sequential,1.377331,524
